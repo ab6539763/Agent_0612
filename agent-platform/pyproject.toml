@@ -19,8 +19,9 @@ dependencies = [
     "alembic>=1.13",
     "pgvector>=0.3",
     # 编排
-    "langgraph>=0.2.60",
+    "langgraph>=1.0",
     "langgraph-checkpoint-postgres>=2.0",
+    "psycopg[binary,pool]>=3.2",
     # LLM 接入
     "openai>=1.50",
     "anthropic>=0.40",
@@ -147,7 +148,8 @@ name = "分层依赖单向流动"
 type = "layers"
 layers = [
     "src.api",
-    "src.agents | src.tools | src.memory | src.rag",
+    "src.agents",
+    "src.tools | src.memory | src.rag",
     "src.llm",
     "src.infrastructure",
     "src.core",

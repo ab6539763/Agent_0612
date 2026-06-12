@@ -112,6 +112,13 @@ class EventStream(Protocol):
         """追加一个事件（worker / runtime 侧调用）。"""
         ...
 
+    async def last_seq(self, run_id: UUID) -> int:
+        """返回该 run 已发布的最大事件序号；流不存在时返回 -1。
+
+        审批恢复（resume）时用于续接 seq。
+        """
+        ...
+
     def subscribe(
         self, run_id: UUID, *, after_seq: int = -1
     ) -> AsyncIterator[dict[str, Any]]:

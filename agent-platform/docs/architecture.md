@@ -42,15 +42,16 @@ API」，对内提供可插拔的工具系统、双层记忆系统、RAG 检索�
 | 层 | 目录 | 职责 | 允许依赖 |
 |---|---|---|---|
 | API 层 | `src/api` | HTTP 路由、请求/响应 Schema、中间件、SSE 序列化、依赖注入装配（组合根） | 下面所有层 |
-| Service/Domain 层 | `src/agents` `src/tools` `src/memory` `src/rag` | 各模块的**接口与模型**（`base.py`，零基础设施依赖）+ 业务实现（可使用 infrastructure 客户端） | 彼此的 `base.py`、llm、infrastructure、core |
+| 编排层 | `src/agents` | LangGraph 图、运行时、事件协议、审批网关 | tools/memory/rag 的接口、llm、infrastructure、core |
+| 能力层 | `src/tools` `src/memory` `src/rag` | 各模块的**接口与模型**（`base.py`）+ 实现；三者相互独立 | llm、infrastructure、core |
 | 模型接入层 | `src/llm` | LLM/Embedding 统一抽象与 Provider 实现、重试/熔断 | core |
 | 基础设施层 | `src/infrastructure` | 数据库引擎/会话、Redis 客户端、队列、事件流、仓储 | core |
 | 核心层 | `src/core` | 配置、日志、异常体系、安全（鉴权/脱敏/注入防护）、共享类型 | 仅标准库与基础三方库 |
 
 **强制规则**（由 import-linter contracts + ruff `flake8-tidy-imports` 在 CI 校验）：
 
-1. 依赖单向流动：`api → (agents|tools|memory|rag) → llm → infrastructure → core`，
-   禁止任何反向 import。
+1. 依赖单向流动：`api → agents → (tools|memory|rag) → llm → infrastructure → core`，
+   禁止任何反向 import；tools/memory/rag 三者相互独立。
 2. 各模块的 `base.py`（接口与模型）只允许依赖其他模块的 `base.py` 与 core，
    保持接口零基础设施依赖，单元测试可用纯内存 Fake 替换。
 3. 跨模块协作只通过 Protocol；实例装配只发生在 `src/api/deps.py` 组合根与
