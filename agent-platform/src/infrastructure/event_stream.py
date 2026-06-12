@@ -54,6 +54,17 @@ class RedisEventStream:
         except RedisError as exc:
             raise CacheError("event publish failed", cause=exc) from exc
 
+    async def last_seq(self, run_id: UUID) -> int:
+        """返回最大事件序号。见 :meth:`src.infrastructure.base.EventStream.last_seq`。"""
+        try:
+            entries = await self._client.xrevrange(self._key(run_id), count=1)
+        except RedisError as exc:
+            raise CacheError("event last_seq failed", cause=exc) from exc
+        if not entries:
+            return -1
+        _stream_id, fields = entries[0]
+        return int(fields["seq"])
+
     async def subscribe(
         self, run_id: UUID, *, after_seq: int = -1
     ) -> AsyncIterator[dict[str, Any]]:

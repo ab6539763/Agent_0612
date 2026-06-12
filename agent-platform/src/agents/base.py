@@ -81,6 +81,9 @@ class AgentState(BaseModel):
         default_factory=list, description="Planner-Executor 模式下的当前计划。"
     )
     iteration: int = Field(default=0, ge=0, description="ReAct 已完成的循环次数。")
+    replan_count: int = Field(
+        default=0, ge=0, description="Planner-Executor 模式下已执行的重新规划次数。"
+    )
     usage: TokenUsage = TokenUsage()
     final_answer: str | None = None
     termination_reason: str | None = Field(
@@ -226,10 +229,19 @@ class ApprovalGate(Protocol):
         ...
 
     async def get(self, approval_id: UUID, *, tenant_id: UUID) -> ApprovalRequest:
-        """查询审批请求。
+        """查询审批请求（API 层使用，按租户隔离）。
 
         Raises:
             NotFoundError: 请求不存在或跨租户。
+        """
+        ...
+
+    async def load(self, approval_id: UUID) -> ApprovalRequest:
+        """按 ID 加载审批请求（runtime 内部使用，不做租户过滤——
+        调用方已通过 run_id 建立信任边界）。
+
+        Raises:
+            NotFoundError: 请求不存在。
         """
         ...
 

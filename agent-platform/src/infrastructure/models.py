@@ -12,6 +12,7 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Computed,
@@ -24,14 +25,18 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from src.core.config import get_settings
 
 EMBEDDING_DIMENSION: int = get_settings().llm.embedding_dimension
+
+PortableJSON = JSON().with_variant(JSONB(), "postgresql")
+"""PG 上为 JSONB，其他方言（测试用 SQLite）退化为 JSON。"""
 
 _NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -68,7 +73,7 @@ class TenantModel(Base, TimestampMixin):
     __tablename__ = "tenants"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(255), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -80,15 +85,15 @@ class ApiKeyModel(Base, TimestampMixin):
     __tablename__ = "api_keys"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
     key_hash: Mapped[str] = mapped_column(String(64), unique=True)
     name: Mapped[str] = mapped_column(String(255))
-    scopes: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    permissions: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    scopes: Mapped[list[str]] = mapped_column(PortableJSON, default=list)
+    permissions: Mapped[list[str]] = mapped_column(PortableJSON, default=list)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -99,7 +104,7 @@ class ConversationModel(Base, TimestampMixin):
     __tablename__ = "conversations"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
@@ -119,7 +124,7 @@ class MessageModel(Base):
     )
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
-    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(PortableJSON)
     tool_call_id: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -131,7 +136,7 @@ class AgentRunModel(Base, TimestampMixin):
 
     __tablename__ = "agent_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -143,7 +148,7 @@ class AgentRunModel(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), index=True, default="queued")
     input: Mapped[str] = mapped_column(Text)
     final_answer: Mapped[str | None] = mapped_column(Text)
-    error: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    error: Mapped[dict[str, Any] | None] = mapped_column(PortableJSON)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
     trace_id: Mapped[str | None] = mapped_column(String(32))
@@ -158,7 +163,7 @@ class TaskRunModel(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_task_runs_idempotency"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
@@ -166,8 +171,8 @@ class TaskRunModel(Base, TimestampMixin):
     task_name: Mapped[str] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(32), index=True, default="queued")
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
-    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    payload: Mapped[dict[str, Any]] = mapped_column(PortableJSON, default=dict)
+    result: Mapped[dict[str, Any] | None] = mapped_column(PortableJSON)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("agent_runs.id", ondelete="SET NULL")
@@ -180,7 +185,7 @@ class ApprovalModel(Base, TimestampMixin):
     __tablename__ = "approvals"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     run_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
@@ -189,7 +194,7 @@ class ApprovalModel(Base, TimestampMixin):
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
     tool_name: Mapped[str] = mapped_column(String(128))
-    arguments: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    arguments: Mapped[dict[str, Any]] = mapped_column(PortableJSON, default=dict)
     status: Mapped[str] = mapped_column(String(16), index=True, default="pending")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     resolver: Mapped[str | None] = mapped_column(String(255))
@@ -205,7 +210,7 @@ class DocumentModel(Base, TimestampMixin):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), index=True
@@ -214,7 +219,7 @@ class DocumentModel(Base, TimestampMixin):
     format: Mapped[str] = mapped_column(String(16))
     title: Mapped[str | None] = mapped_column(String(512))
     status: Mapped[str] = mapped_column(String(16), default="pending")
-    doc_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    doc_metadata: Mapped[dict[str, Any]] = mapped_column(PortableJSON, default=dict)
 
 
 class ChunkModel(Base):
@@ -234,7 +239,7 @@ class ChunkModel(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     document_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
@@ -244,8 +249,8 @@ class ChunkModel(Base):
     )
     ordinal: Mapped[int] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
-    heading_path: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    chunk_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    heading_path: Mapped[list[str]] = mapped_column(PortableJSON, default=list)
+    chunk_metadata: Mapped[dict[str, Any]] = mapped_column(PortableJSON, default=dict)
     embedding: Mapped[Any] = mapped_column(Vector(EMBEDDING_DIMENSION))
     tsv: Mapped[Any] = mapped_column(
         TSVECTOR,
@@ -273,7 +278,7 @@ class MemoryModel(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid, primary_key=True, default=uuid.uuid4
     )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE")
