@@ -10,12 +10,12 @@ RAG 混合检索、异步长任务与 Human-in-the-loop 审批，SSE 全程流�
 
 ## 当前状态
 
-**阶段 1 / 5**：架构设计 + 核心模块接口定义（无实现）。
+**阶段 2 / 5**：core + infrastructure + llm 适配层已交付。
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 1 | 架构文档、ADR、domain 接口、异常体系 | 完成 |
-| 2 | core（配置/日志/安全）、infrastructure、llm 适配层 | 待开始 |
+| 2 | core（配置/日志/安全/可观测性）、infrastructure（PG/Redis/ARQ/迁移）、llm 适配层（重试+熔断） | 完成 |
 | 3 | agents（LangGraph 编排）、tools 系统 | 待开始 |
 | 4 | memory、rag 管道 | 待开始 |
 | 5 | api 层、SSE、测试、部署配置 | 待开始 |
@@ -41,8 +41,16 @@ RAG 混合检索、异步长任务与 Human-in-the-loop 审批，SSE 全程流�
 uv venv && source .venv/bin/activate
 uv pip install -e ".[dev]"
 
-# 静态检查
+# 配置
+cp .env.example .env   # 按需填入 LLM 凭证等
+
+# 静态检查与测试
 ruff check src tests
 mypy
-lint-imports   # 分层依赖契约
+lint-imports                 # 分层依赖契约
+pytest                       # 单元测试（LLM 全 Mock，覆盖率门槛 80%）
+
+# 数据库迁移（需要 PostgreSQL + pgvector）
+alembic upgrade head
+alembic upgrade head --sql   # 仅生成 SQL，不连库
 ```
